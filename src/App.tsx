@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import styled from '@emotion/styled';
 import { gql } from 'apollo-boost';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/react-hooks';
-import { sample, sampleSize } from 'lodash';
+import { sample, sampleSize, startCase } from 'lodash';
 
 const Main = styled.main`
   display: flex;
@@ -17,12 +17,31 @@ const Header = styled.header`
   font-size: 2rem;
 `;
 
-const CardContainer = styled.div`
+const CardsContainer = styled.div`
   flex: 1;
   display: flex;
   flex-wrap: wrap;
 
   margin: 1rem;
+`;
+
+const CardContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+
+  margin: 1rem;
+`;
+
+const Select = styled.select`
+  margin: 0.5rem 1rem;
+`;
+
+const CardHeading = styled.h3`
+  text-align: center;
+`;
+
+const CardImage = styled.img`
+  cursor: pointer;
 `;
 
 const HAND = gql`
@@ -44,9 +63,10 @@ const HAND = gql`
 
 const ALL_CARDS = gql`
   query allCards {
-    cards(orderBy: name_ASC, where: { isDrawn: false }) {
+    cards(orderBy: name_ASC) {
       id
       name
+      isDrawn
       image {
         id
         fileName
@@ -155,6 +175,7 @@ const RELEASE_CARD = gql`
     updateCard(where: { name: $cardName }, data: { isDrawn: false }) {
       id
       name
+      isDrawn
     }
     publishCard(where: { name: $cardName }) {
       id
@@ -163,8 +184,11 @@ const RELEASE_CARD = gql`
   }
 `;
 
+const filterDrawn = ({ isDrawn }: any) => !isDrawn;
+
 export const App = () => {
   const [selectedAgent, setAgent] = useState('');
+  const [gettingHand, setGettingHand] = useState(false);
   const [stage, setStage] = useState('');
   const { loading: allCardsLoading, error: allCardsError, data: allCardsData } = useQuery(ALL_CARDS);
   const { loading: agentLoading, error: agentError, data: agentData } = useQuery(AGENTS);
@@ -194,10 +218,11 @@ export const App = () => {
       updateCardLoading
     );
     if (nothingErrored && nothingLoading) {
+      console.log(cardData);
       const hasHand = cardData && cardData.agent.hand.length > 0;
       const hasAgent = selectedAgent !== '';
-      if (stage === '1' && !hasHand && allCardsData && hasAgent) {
-        const cards = allCardsData.cards;
+      if (stage === '1' && !hasHand && allCardsData && hasAgent && !gettingHand) {
+        const cards = allCardsData.cards.filter(filterDrawn);
         const majorArcana = cards.filter(({ name }: any) => isNaN(Number(name[0])));
         const otherCards = cards.filter(({ name }: any) => !isNaN(Number(name[0])));
         const major = sample(majorArcana);
@@ -206,6 +231,7 @@ export const App = () => {
         const hand = [major, ...restOfHand];
         const cardNames = hand.map(({ name }: any) => name);
         const cardNamesInput = hand.map(({ name }: any) => ({ name }));
+        setGettingHand(true);
         updateAgentHand({
           variables: { agentName: selectedAgent, cardNamesInput },
           refetchQueries: [{ query: HAND, variables: { name: selectedAgent } }],
@@ -215,7 +241,7 @@ export const App = () => {
         });
       }
       if (stage !== '' && stage !== '1' && !hasHand && allCardsData && hasAgent) {
-        const cards = allCardsData.cards;
+        const cards = allCardsData.cards.filter(filterDrawn);
         const hand = sampleSize(cards, 5);
         const cardNames = hand.map(({ name }: any) => name);
         const cardNamesInput = hand.map(({ name }: any) => ({ name }));
@@ -251,10 +277,10 @@ export const App = () => {
 
   const Cards = cardData
     ? cardData.agent.hand.map(({ name, image: { url } }: any) => (
-        <div key={name}>
-          <h3>{name}</h3>
-          <img src={url} alt={name} onClick={changeOwnerHandler(name)} />
-        </div>
+        <CardContainer key={name}>
+          <CardHeading>{startCase(name).replace('Of', 'of')}</CardHeading>
+          <CardImage src={url} alt={name} onClick={changeOwnerHandler(name)} />
+        </CardContainer>
       ))
     : null;
 
@@ -277,6 +303,16 @@ export const App = () => {
     [setStage]
   );
 
+  const resetIsDrawn = useCallback(() => {
+    console.log('click');
+    allCardsData.cards.forEach(({ name, isDrawn }: any) => {
+      console.log(isDrawn);
+      if (isDrawn) {
+        updateCard({ variables: { cardName: name, isDrawn: false } });
+      }
+    });
+  }, [updateCard, allCardsData]);
+
   return (
     <>
       <Header>
@@ -284,11 +320,11 @@ export const App = () => {
       </Header>
       <Main>
         <div>
-          <select value={selectedAgent} onChange={handleAgent}>
+          <Select value={selectedAgent} onChange={handleAgent}>
             <option value="">Who are you?</option>
             {Agents}
-          </select>
-          <select value={stage} onChange={handleStage}>
+          </Select>
+          <Select value={stage} onChange={handleStage}>
             <option value="">What stage are you on?</option>
             <option value="1">1</option>
             <option value="2">2</option>
@@ -302,9 +338,10 @@ export const App = () => {
             <option value="10">10</option>
             <option value="11">11</option>
             <option value="12">12</option>
-          </select>
+          </Select>
+          {selectedAgent === 'JVB' ? <button onClick={resetIsDrawn}>Reset isDrawn</button> : null}
         </div>
-        <CardContainer>{Cards}</CardContainer>
+        <CardsContainer>{Cards}</CardsContainer>
       </Main>
     </>
   );
