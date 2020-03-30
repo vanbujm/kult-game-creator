@@ -1,0 +1,15 @@
+{
+  "name": "GraphCMS GraphQL Schema",
+  "schemaPath": "remote-schema.graphql",
+  "extensions": {
+    "endpoints": {
+      "GraphCMS GraphQL Master": {
+        "url": "https://api-us-west-2.graphcms.com/v2/ck8dv9ldy0m7o01xkgoo756im/master",
+        "headers": {
+          "user-agent": "JS GraphQL"
+        },
+        "introspect": true
+      }
+    }
+  }
+}
